@@ -1,0 +1,42 @@
+name: Deploy Flask App
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Criar um arquivo temporário para a chave privada
+        run: |
+          echo "${{ secrets.KEY }}" > /tmp/private_key
+          chmod 600 /tmp/private_key
+
+      - name: Criando a pasta da aplicação e acertando diretório...
+        run: |
+          ssh -i /tmp/private_key -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null ubuntu@${{ secrets.HOST }} \
+          "sudo mkdir -p /home/ubuntu/appflask && sudo chown -R ubuntu:ubuntu /home/ubuntu/appflask"
+
+      - name: Transferindo os arquivos da aplicação
+        run: |
+          scp -i /tmp/private_key -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -r ${{ github.workspace }}/* ubuntu@${{ secrets.HOST }}:/home/ubuntu/appflask
+
+      - name: Instalando dependências
+        run: |
+          ssh -i /tmp/private_key -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null ubuntu@${{ secrets.HOST }} \
+          "cd /home/ubuntu/appflask && python3 -m venv venv && source venv/bin/activate && pip install -r requirements.txt"
+
+      - name: Reiniciando o serviço da aplicação
+        run: |
+          ssh -i /tmp/private_key -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null ubuntu@${{ secrets.HOST }} \
+          "sudo systemctl restart appflask.service"
+
+      - name: Limpa o arquivo de chave privada após uso
+        run: |
+          rm /tmp/private_key
